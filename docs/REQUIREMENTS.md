@@ -411,7 +411,7 @@ Next.js API Routes を想定。全 API でリクエストヘッダー `X-User-Id
 | DELETE | `/api/messages/[id]` | メッセージ削除（投稿者のみ、論理削除） |
 | POST | `/api/channels/[id]/read` | 既読マーク（`lastReadAt` 更新） |
 | GET | `/api/workspaces/[id]/unread` | ワークスペース内の未読数一覧 |
-| GET | `/api/channels/[id]/events` | SSE ストリーム（新着メッセージ通知） |
+| GET | `/api/workspaces/[id]/unread` | ワークスペース内の未読数一覧（チャンネル API に統合） |
 
 ### 6.2 主要 API のリクエスト/レスポンス
 
@@ -463,19 +463,18 @@ Next.js API Routes を想定。全 API でリクエストヘッダー `X-User-Id
 
 ### 6.3 リアルタイム更新方針
 
-Vercel サーバーレス環境では WebSocket の常時接続が難しいため、以下の方式を採用する。
+Vercel サーバーレス環境では WebSocket / SSE の常時接続が制限されるため、MVP では **短周期ポーリング** を採用する。
 
 | 方式 | メリット | デメリット | 推奨 |
 |------|---------|-----------|------|
-| **SSE（Server-Sent Events）** | サーバーからのプッシュが可能。HTTP ベースで Vercel 対応 | 一方向のみ。接続タイムアウトに注意 | **MVP 推奨** |
-| **短周期ポーリング（3 秒）** | 実装が単純。確実に動作 | サーバー負荷・遅延が大きい | SSE 非対応時のフォールバック |
+| **短周期ポーリング（3 秒）** | 実装が単純。Vercel で確実に動作 | サーバー負荷・若干の遅延 | **MVP 推奨（Vercel 本番）** |
+| **SSE（Server-Sent Events）** | サーバーからのプッシュが可能 | Vercel では接続タイムアウトの制約あり | セルフホスト時に検討 |
 | **WebSocket（外部サービス）** | 双方向・低遅延 | Pusher/Ably 等の追加コスト | Phase 2 以降で検討 |
 
-**MVP 推奨実装**:
+**MVP 推奨実装（Vercel 向け）**:
 
-1. チャンネル表示中は SSE（`/api/channels/[id]/events`）で新着メッセージを受信
-2. SSE 接続失敗時は 3 秒間隔のポーリングにフォールバック
-3. 未読バッジ更新はワークスペース表示中に 5 秒間隔で `/api/workspaces/[id]/unread` をポーリング
+1. チャンネル表示中は 3 秒間隔で `GET /api/channels/[id]/messages?since=<timestamp>` をポーリング
+2. 未読バッジ更新はワークスペース表示中に 5 秒間隔でチャンネル一覧 API をポーリング
 
 ### 6.4 認可ルール
 
@@ -516,7 +515,7 @@ task-app との一貫性を優先した推奨構成。
 | フロントエンド | Next.js 16, React 19, Tailwind CSS | App Router |
 | バックエンド | Next.js API Routes | サーバーレス関数 |
 | データベース | PostgreSQL (Neon) + Prisma | `@prisma/adapter-pg` + `pg` |
-| リアルタイム | SSE + ポーリングフォールバック | MVP |
+| リアルタイム | 3 秒ポーリング（Vercel 向け） | MVP |
 | デプロイ | Vercel | Hobby プラン（無料） |
 | 状態管理 | React Context + SWR/fetch | 外部ライブラリ最小限 |
 

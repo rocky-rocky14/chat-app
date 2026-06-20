@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ChatSpace
 
-## Getting Started
+Slack 風のシンプルなチームチャットアプリ。チャンネルと DM でテキストコミュニケーションができます。
 
-First, run the development server:
+## 機能
+
+- ワークスペースの作成・招待リンク共有
+- 公開チャンネル（`#general` 自動作成）
+- テキストメッセージの投稿・編集・削除
+- ダイレクトメッセージ（DM）
+- 未読バッジ
+- リアルタイム更新（3 秒ポーリング）
+
+## 技術スタック
+
+- **フロントエンド**: Next.js 16, React 19, Tailwind CSS
+- **バックエンド**: Next.js API Routes
+- **データベース**: PostgreSQL (Neon) + Prisma
+- **デプロイ**: Vercel
+
+## セットアップ
 
 ```bash
+# 依存関係のインストール
+npm install
+
+# 環境変数の設定
+cp .env.example .env
+# DATABASE_URL に PostgreSQL の接続文字列を設定
+
+# データベースのマイグレーション
+npx prisma migrate dev
+
+# 開発サーバーの起動
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 でアプリにアクセスできます。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Vercel へのデプロイ
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Vercel のサーバーレス環境では PostgreSQL（Neon）が必要です。
 
-## Learn More
+```bash
+# 1. Neon 連携（初回はブラウザで利用規約への同意が必要）
+npx vercel integration add neon --name chat-app-db --plan free -e production -e preview
 
-To learn more about Next.js, take a look at the following resources:
+# 2. 環境変数をローカルに取得
+npx vercel env pull .env.local
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# 3. 本番デプロイ
+npx vercel deploy --prod
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+ビルド時に `prisma migrate deploy` が自動実行され、本番 DB にスキーマが適用されます。
 
-## Deploy on Vercel
+## 使い方
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. 初回アクセス時に表示名を入力
+2. 「新規ワークスペース」からワークスペースを作成
+3. `#general` チャンネルでメッセージを投稿
+4. サイドバーから招待リンクをコピーしてメンバーを招待
+5. メンバー一覧から DM を開始
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## プロジェクト構成
+
+```
+src/
+  app/
+    page.tsx                         # ワークスペース一覧
+    w/[id]/page.tsx                  # デフォルトチャンネルへリダイレクト
+    w/[id]/c/[channelId]/page.tsx    # チャンネル
+    w/[id]/dm/[channelId]/page.tsx   # DM
+    invite/[code]/page.tsx             # 招待参加
+    api/                             # API Routes
+  components/                        # UI コンポーネント
+  lib/                               # ユーティリティ
+prisma/
+  schema.prisma                      # データベーススキーマ
+docs/
+  REQUIREMENTS.md                    # 要件定義書
+```
+
+## リアルタイム更新について
+
+Vercel サーバーレス環境では WebSocket / SSE の常時接続が制限されるため、MVP では **3 秒間隔のポーリング** で新着メッセージを取得します。未読バッジは 5 秒間隔で更新されます。
